@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoAtlas Studio — Cartographie Scientifique</title>
+    
+    <!-- Librairies externes -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        /* Interface de contrôle */
+        .controls { 
+            background: white; 
+            padding: 25px; 
+            border-radius: 12px; 
+            max-width: 1000px; 
+            margin: 0 auto 30px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .controls h1 { 
+            color: #2c3e50; 
+            margin-bottom: 5px;
+            font-size: 1.8em;
+        }
+        
+        .controls .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+        
+        .form-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .form-section h3 {
+            color: #2c3e50;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }
+        
+        .form-row { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 12px; 
+            flex-wrap: wrap; 
+        }
+        
+        .form-group { 
+            flex: 1; 
+            min-width: 200px; 
+        }
+        
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: 600; 
+            font-size: 0.9em; 
+            color: #555; 
+        }
+        
+        input, select, textarea { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 6px; 
+            font-size: 0.95em;
+            transition: border 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        button { 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            padding: 12px 28px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 1em; 
+            font-weight: 600;
+            transition: all 0.3s;
+            margin-right: 10px;
+        }
+        
+        button:hover { 
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        button.export { 
+            background: #27ae60; 
+        }
+        
+        button.export:hover { 
+            background: #229954;
+        }
+        
+        button.search {
+            background: #9b59b6;
+            padding: 10px 20px;
+            font-size: 0.9em;
+        }
+        
+        button.search:hover {
+            background: #8e44ad;
+        }
+        
+        /* Conteneur A4 Paysage */
+        #livrable-container {
+            width: 1123px;
+            height: 794px;
+            background: white;
+            margin: 0 auto;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            display: none;
+            position: relative;
+            box-sizing: border-box;
+        }
+        
+        /* En-tête */
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-start;
+            border-bottom: 3px solid #2c3e50; 
+            padding-bottom: 12px; 
+            margin-bottom: 20px; 
+        }
+        
+        .header-left h1 { 
+            margin: 0; 
+            font-size: 24px; 
+            color: #2c3e50; 
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .header-left .subtitle {
+            font-size: 13px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .header-right { 
+            font-size: 11px; 
+            text-align: right; 
+            color: #555; 
+            line-height: 1.6;
+        }
+        
+        .header-right strong {
+            color: #2c3e50;
+        }
+        
+        /* Contenu principal */
+        .main-content { 
+            display: grid; 
+            grid-template-columns: 1fr 300px; 
+            gap: 15px; 
+            height: calc(100% - 110px); 
+        }
+        
+        .map-section { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+        }
+        
+        .map-box { 
+            border: 2px solid #34495e; 
+            position: relative; 
+            border-radius: 6px; 
+            overflow: hidden; 
+            background: #ecf0f1; 
+        }
+        
+        .map-title { 
+            position: absolute; 
+            top: 8px; 
+            left: 8px; 
+            background: rgba(255,255,255,0.95); 
+            padding: 4px 10px; 
+            font-size: 11px; 
+            font-weight: bold; 
+            z-index: 1000; 
+            border-radius: 4px; 
+            border: 1px solid #bdc3c7;
+            color: #2c3e50;
+        }
+        
+        #carte-ensemble { height: 220px; width: 100%; }
+        #carte-detail { height: 420px; width: 100%; }
+        
+        .sidebar { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px; 
+        }
+        
+        .sidebar-box { 
+            border: 1px solid #bdc3c7; 
+            border-radius: 6px; 
+            padding: 12px; 
+            background: #f9f9f9; 
+        }
+        
+        .sidebar-box h3 { 
+            margin: 0 0 10px 0; 
+            font-size: 13px; 
+            color: #2c3e50; 
+            border-bottom: 2px solid #3498db; 
+            padding-bottom: 6px;
+        }
+        
+        #chart-climat { height: 160px; position: relative; }
+        
+        .legend-item { 
+            display: flex; 
+            align-items: center; 
+            margin-bottom: 6px; 
+            font-size: 10px; 
+            color: #555;
+        }
+        
+        .legend-color { 
+            width: 18px; 
+            height: 10px; 
+            margin-right: 8px; 
+            border: 1px solid #999; 
+            flex-shrink: 0; 
+        }
+        
+        .metadata-text {
+            font-size: 10px; 
+            line-height: 1.5;
+            color: #555;
+        }
+        
+        .metadata-text strong {
+            color: #2c3e50;
+        }
+        
+        /* Pied de page */
+        .footer { 
+            position: absolute; 
+            bottom: 20px; 
+            left: 30px; 
+            right: 30px; 
+            display: flex; 
+            justify-content: space-between; 
+            font-size: 9px; 
+            color: #7f8c8d; 
+            border-top: 1px solid #ecf0f1; 
+            padding-top: 10px; 
+        }
+        
+        /* Éléments cartographiques */
+        .north-arrow { 
+            position: absolute; 
+            top: 10px; 
+            right: 10px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #2c3e50; 
+            z-index: 1000; 
+            background: rgba(255,255,255,0.95); 
+            padding: 6px; 
+            border-radius: 50%; 
+            width: 32px; 
+            height: 32px; 
+            text-align: center; 
+            line-height: 18px; 
+            border: 2px solid #2c3e50; 
+        }
+        
+        .scale-bar { 
+            position: absolute; 
+            bottom: 10px; 
+            left: 10px; 
+            background: rgba(255,255,255,0.95); 
+            padding: 3px 8px; 
+            font-size: 9px; 
+            z-index: 1000; 
+            border: 1px solid #333; 
+            border-radius: 3px;
+            color: #2c3e50;
+        }
+        
+        .coord-grid {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.95);
+            padding: 3px 8px;
+            font-size: 9px;
+            z-index: 1000;
+            border: 1px solid #333;
+            border-radius: 3px;
+            color: #2c3e50;
+        }
+        
+        /* Messages d'état */
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-size: 0.9em;
+            display: none;
+        }
+        
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status-message.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            #livrable-container {
+                transform: scale(0.85);
+                transform-origin: top center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h1>🌍 GeoAtlas Studio</h1>
+        <p class="subtitle">Application de cartographie scientifique et d'aménagement du territoire</p>
+        
+        <div id="status" class="status-message"></div>
+        
+        <!-- Section 1: Zone d'étude -->
+        <div class="form-section">
+            <h3>📍 Étape 1: Définir la zone d'étude</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Recherche par nom de lieu</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="searchLocation" placeholder="Ex: Oglat Edaïra, Naâma, Algérie">
+                        <button class="search" onclick="rechercherLieu()">Rechercher</button>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Latitude</label>
+                    <input type="number" id="lat" step="0.0001" value="32.8333">
+                </div>
+                <div class="form-group">
+                    <label>Longitude</label>
+                    <input type="number" id="lon" step="0.0001" value="-0.3167">
+                </div>
+                <div class="form-group">
+                    <label>Rayon d'étude (km)</label>
+                    <input type="number" id="radius" value="15" min="1" max="100">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 2: Configuration -->
+        <div class="form-section">
+            <h3> Étape 2: Configuration de l'étude</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Pays</label>
+                    <select id="pays">
+                        <option value="Algérie">Algérie</option>
+                        <option value="Cameroun">Cameroun</option>
+                        <option value="France">France</option>
+                        <option value="Sénégal">Sénégal</option>
+                        <option value="Maroc">Maroc</option>
+                        <option value="Tunisie">Tunisie</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Région / Wilaya</label>
+                    <input type="text" id="region" value="Naâma">
+                </div>
+                <div class="form-group">
+                    <label>Nom de la zone</label>
+                    <input type="text" id="zoneNom" value="Oglat Edaïra">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Titre de la carte</label>
+                    <input type="text" id="titreCarte" value="Carte de localisation et caractéristiques environnementales">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Auteur / Organisme</label>
+                    <input type="text" id="auteur" value="Pr. Guerine Lakhdar">
+                </div>
+                <div class="form-group">
+                    <label>Période d'étude</label>
+                    <input type="text" id="periode" value="2020-2026">
+                </div>
+            </div>
+        </div>
+        
+        <button onclick="genererLivrable()">🗺️ Générer la planche cartographique</button>
+        <button class="export" onclick="exporterPDF()" id="btnExport" style="display:none;">📥 Exporter en PDF (A4)</button>
+        <button class="export" onclick="exporterPNG()" id="btnExportPNG" style="display:none;">🖼️ Exporter en PNG</button>
+    </div>
+
+    <!-- Conteneur de la planche cartographique -->
+    <div id="livrable-container">
+        <div class="header">
+            <div class="header-left">
+                <h1 id="titre-planche">CARTE D'AMÉNAGEMENT</h1>
+                <div class="subtitle" id="sous-titre">Zone d'étude : Oglat Edaïra, Wilaya de Naâma, Algérie</div>
+            </div>
+            <div class="header-right">
+                <strong>GeoAtlas Studio</strong><br>
+                Sous la direction de <strong id="auteur-display">Pr. Guerine Lakhdar</strong><br>
+                Période : <span id="periode-display">2020-2026</span><br>
+                Date de production : <span id="date-jour"></span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="map-section">
+                <div class="map-box">
+                    <div class="map-title">A. Carte de localisation nationale</div>
+                    <div id="carte-ensemble"></div>
+                </div>
+                <div class="map-box">
+                    <div class="map-title">B. Zone d'étude détaillée — Hydrologie & Imagerie satellite</div>
+                    <div id="carte-detail"></div>
+                    <div class="north-arrow">N</div>
+                    <div class="scale-bar" id="scale-bar">Échelle : 1:50 000</div>
+                    <div class="coord-grid" id="coord-grid">EPSG:4326</div>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="sidebar-box">
+                    <h3>C. Diagramme climatique</h3>
+                    <div id="chart-climat"><canvas id="myChart"></canvas></div>
+                    <div style="font-size: 9px; color: #7f8c8d; margin-top: 5px; text-align: center;">
+                        Source : Open-Meteo API (ERA5)
+                    </div>
+                </div>
+                
+                <div class="sidebar-box">
+                    <h3>Légende</h3>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#3498db;"></div>
+                        <span>Réseau hydrographique (OSM)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#27ae60;"></div>
+                        <span>Zone de végétation</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#e74c3c; border-radius:50%;"></div>
+                        <span>Zone d'étude</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:#f39c12;"></div>
+                        <span>Zone aride / steppique</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background:rgba(0,0,0,0.1);"></div>
+                        <span>Imagerie satellite (Esri)</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-box">
+                    <h3>Métadonnées</h3>
+                    <div class="metadata-text">
+                        <strong>Projection :</strong> WGS 84 (EPSG:4326)<br>
+                        <strong>Fond de carte :</strong> OpenStreetMap / Esri World Imagery<br>
+                        <strong>Hydrologie :</strong> OpenStreetMap (Overpass API)<br>
+                        <strong>Climat :</strong> Open-Meteo API (ERA5, 365 jours)<br>
+                        <strong>Résolution satellite :</strong> ~10m (Esri)<br>
+                        <strong>Coordonnées :</strong> <span id="coords-display">32.8333°N, 0.3167°W</span><br>
+                        <strong>Superficie étudiée :</strong> <span id="superficie-display">~707 km²</span>
+                    </div>
+                </div>
+                
+                <div class="sidebar-box">
+                    <h3>Sources</h3>
+                    <div class="metadata-text">
+                        • OpenStreetMap contributors<br>
+                        • Esri World Imagery<br>
+                        • Open-Meteo Historical Weather<br>
+                        • Nominatim (géocodage)<br>
+                        <br>
+                        <em>Version 1.0 — Octobre 2026</em>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <span>GeoAtlas Studio © 2026 — Cartographie scientifique et aménagement du territoire</span>
+            <span>Format A4 Paysage (297×210 mm) — Page 1/1</span>
+        </div>
+    </div>
+
+    <script>
+        let mapEns, mapDet, chart;
+        let currentLat = 32.8333;
+        let currentLon = -0.3167;
+
+        // Fonction de recherche géographique via Nominatim
+        async function rechercherLieu() {
+            const query = document.getElementById('searchLocation').value;
+            if (!query) {
+                showStatus('Veuillez entrer un nom de lieu', 'warning');
+                return;
+            }
+            
+            showStatus('Recherche en cours...', 'info');
+            
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                    currentLat = parseFloat(data[0].lat);
+                    currentLon = parseFloat(data[0].lon);
+                    
+                    document.getElementById('lat').value = currentLat.toFixed(4);
+                    document.getElementById('lon').value = currentLon.toFixed(4);
+                    
+                    // Extraire la région si disponible
+                    if (data[0].display_name) {
+                        const parts = data[0].display_name.split(',');
+                        if (parts.length >= 3) {
+                            document.getElementById('region').value = parts[parts.length - 2].trim();
+                        }
+                    }
+                    
+                    showStatus(`✓ Lieu trouvé : ${data[0].display_name}`, 'success');
+                } else {
+                    showStatus('Aucun résultat trouvé. Vérifiez le nom ou utilisez les coordonnées manuellement.', 'warning');
+                }
+            } catch (error) {
+                showStatus('Erreur de connexion au service de géocodage', 'error');
+                console.error(error);
+            }
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status-message ${type}`;
+            status.style.display = 'block';
+            
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function genererLivrable() {
+            // Récupérer les valeurs
+            currentLat = parseFloat(document.getElementById('lat').value);
+            currentLon = parseFloat(document.getElementById('lon').value);
+            const zoneNom = document.getElementById('zoneNom').value;
+            const pays = document.getElementById('pays').value;
+            const region = document.getElementById('region').value;
+            const titre = document.getElementById('titreCarte').value;
+            const auteur = document.getElementById('auteur').value;
+            const periode = document.getElementById('periode').value;
+            const radius = parseFloat(document.getElementById('radius').value);
+            
+            // Mettre à jour les textes
+            document.getElementById('titre-planche').textContent = titre.toUpperCase();
+            document.getElementById('sous-titre').textContent = `Zone d'étude : ${zoneNom}, ${region}, ${pays}`;
+            document.getElementById('auteur-display').textContent = auteur;
+            document.getElementById('periode-display').textContent = periode;
+            document.getElementById('date-jour').textContent = new Date().toLocaleDateString('fr-FR');
+            document.getElementById('coords-display').textContent = `${Math.abs(currentLat).toFixed(4)}°${currentLat >= 0 ? 'N' : 'S'}, ${Math.abs(currentLon).toFixed(4)}°${currentLon >= 0 ? 'E' : 'W'}`;
+            
+            // Calculer la superficie approximative
+            const superficie = Math.PI * Math.pow(radius, 2);
+            document.getElementById('superficie-display').textContent = `~${superficie.toFixed(0)} km²`;
+            
+            // Afficher le conteneur
+            document.getElementById('livrable-container').style.display = 'block';
+            document.getElementById('btnExport').style.display = 'inline-block';
+            document.getElementById('btnExportPNG').style.display = 'inline-block';
+            
+            // Initialiser les cartes et le graphique
+            setTimeout(() => {
+                initCarteEnsemble();
+                initCarteDetail();
+                initClimat();
+            }, 300);
+            
+            showStatus('✓ Planche cartographique générée avec succès', 'success');
+        }
+
+        function initCarteEnsemble() {
+            if (mapEns) {
+                mapEns.remove();
+                mapEns = null;
+            }
+            
+            mapEns = L.map('carte-ensemble', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([currentLat, currentLon], 6);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 19
+            }).addTo(mapEns);
+            
+            // Marqueur de la zone d'étude
+            L.circleMarker([currentLat, currentLon], {
+                radius: 10,
+                color: '#c0392b',
+                fillColor: '#e74c3c',
+                fillOpacity: 1,
+                weight: 3
+            }).addTo(mapEns).bindPopup(`<strong>Zone d'étude</strong><br>${document.getElementById('zoneNom').value}`);
+            
+            setTimeout(() => mapEns.invalidateSize(), 100);
+        }
+
+        async function initCarteDetail() {
+            if (mapDet) {
+                mapDet.remove();
+                mapDet = null;
+            }
+            
+            mapDet = L.map('carte-detail', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([currentLat, currentLon], 12);
+            
+            // Fond satellite Esri
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles © Esri',
+                maxZoom: 19
+            }).addTo(mapDet);
+            
+            // Marqueur central
+            L.circleMarker([currentLat, currentLon], {
+                radius: 12,
+                color: '#c0392b',
+                fillColor: '#e74c3c',
+                fillOpacity: 0.9,
+                weight: 3
+            }).addTo(mapDet);
+            
+            // Charger l'hydrologie
+            await chargerHydrologie();
+            
+            setTimeout(() => mapDet.invalidateSize(), 100);
+        }
+
+        async function chargerHydrologie() {
+            const radius = parseInt(document.getElementById('radius').value) * 1000; // Convertir en mètres
+            const query = `[out:json][timeout:25];(way["waterway"="river"](around:${radius},${currentLat},${currentLon});way["waterway"="stream"](around:${radius},${currentLat},${currentLon});way["waterway"="wadi"](around:${radius},${currentLat},${currentLon}););out geom;`;
+            
+            try {
+                const response = await fetch('https://overpass-api.de/api/interpreter', {
+                    method: 'POST',
+                    body: `data=${encodeURIComponent(query)}`
+                });
+                const data = await response.json();
+                
+                let count = 0;
+                data.elements.forEach(element => {
+                    if (element.geometry && element.geometry.length > 1) {
+                        const latlngs = element.geometry.map(point => [point.lat, point.lon]);
+                        L.polyline(latlngs, {
+                            color: '#3498db',
+                            weight: 3,
+                            opacity: 0.8
+                        }).addTo(mapDet);
+                        count++;
+                    }
+                });
+                
+                if (count === 0) {
+                    console.log('Aucun cours d\'eau trouvé dans la zone');
+                }
+            } catch (error) {
+                console.error('Erreur chargement hydrologie:', error);
+            }
+        }
+
+        async function initClimat() {
+            if (chart) {
+                chart.destroy();
+                chart = null;
+            }
+            
+            // Données de secours (climat méditerranéen/aride type)
+            let precip = [25, 20, 18, 15, 10, 5, 2, 3, 8, 15, 22, 28];
+            let temp = [8, 10, 13, 16, 20, 24, 27, 27, 24, 19, 13, 9];
+            
+            try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&daily=temperature_2m_max,precipitation_sum&past_days=365&timezone=auto`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                let precipMensuel = new Array(12).fill(0);
+                let tempMensuelle = new Array(12).fill(0);
+                let count = new Array(12).fill(0);
+
+                data.daily.time.forEach((date, i) => {
+                    const mois = new Date(date).getMonth();
+                    precipMensuel[mois] += data.daily.precipitation_sum[i] || 0;
+                    tempMensuelle[mois] += data.daily.temperature_2m_max[i] || 0;
+                    count[mois]++;
+                });
+
+                precip = precipMensuel.map((p, i) => count[i] > 0 ? p : precip[i]);
+                temp = tempMensuelle.map((t, i) => count[i] > 0 ? (t / count[i]).toFixed(1) : temp[i]);
+            } catch (error) {
+                console.log('Données climatiques de secours utilisées');
+            }
+
+            const ctx = document.getElementById('myChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
+                    datasets: [{
+                        label: 'Précip. (mm)',
+                        data: precip,
+                        backgroundColor: '#3498db',
+                        yAxisID: 'y',
+                        order: 2
+                    }, {
+                        label: 'Temp. max (°C)',
+                        data: temp,
+                        type: 'line',
+                        borderColor: '#e74c3c',
+                        backgroundColor: '#e74c3c',
+                        pointRadius: 3,
+                        yAxisID: 'y1',
+                        order: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 10, font: { size: 9 } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            position: 'left',
+                            title: { display: true, text: 'Précipitations (mm)', font: { size: 9 } },
+                            ticks: { font: { size: 8 } }
+                        },
+                        y1: {
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Température (°C)', font: { size: 9 } },
+                            ticks: { font: { size: 8 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function exporterPDF() {
+            const { jsPDF } = window.jspdf;
+            const element = document.getElementById('livrable-container');
+            
+            element.style.boxShadow = 'none';
+            
+            if (mapEns) mapEns.invalidateSize();
+            if (mapDet) mapDet.invalidateSize();
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF('l', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`GeoAtlas_${document.getElementById('zoneNom').value}_${Date.now()}.pdf`);
+            
+            element.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
+            showStatus('✓ PDF exporté avec succès', 'success');
+        }
+
+        async function exporterPNG() {
+            const element = document.getElementById('livrable-container');
+            
+            element.style.boxShadow = 'none';
+            
+            if (mapEns) mapEns.invalidateSize();
+            if (mapDet) mapDet.invalidateSize();
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+            
+            const link = document.createElement('a');
+            link.download = `GeoAtlas_${document.getElementById('zoneNom').value}_${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            element.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
+            showStatus('✓ PNG exporté avec succès', 'success');
+        }
+    </script>
+</body>
+</html>
